@@ -1,6 +1,12 @@
-node_modules/
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
 dist/
-*.js.map
+.venv/
+.pytest_cache/
+
 .claude/
 .rstk/
 .scratch/

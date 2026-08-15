@@ -9,37 +9,45 @@ on:
 
 jobs:
   build:
-    name: build (node ${{ matrix.node }} on ${{ matrix.os }})
+    name: test (python ${{ matrix.python }} on ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        node: [22, 24, 26]
+        python: ['3.11', '3.12', '3.13']
 
     steps:
       - uses: actions/checkout@v7
 
-      - name: Setup Node ${{ matrix.node }}
-        uses: actions/setup-node@v7
+      - name: Setup Python ${{ matrix.python }}
+        uses: actions/setup-python@v6
         with:
-          node-version: ${{ matrix.node }}
-          cache: npm
+          python-version: ${{ matrix.python }}
+          cache: pip
 
       - name: Install
-        run: npm ci --ignore-scripts
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
 
-      - name: Type-check & build
-        run: npm run build
+      - name: Compile check
+        run: python -m compileall -q src scripts tests
 
-      - name: Verify shebang and bin
+      - name: Tests
+        run: python -m pytest -q
+
+      - name: Verify package & console script
         shell: bash
         run: |
-          head -1 dist/index.js | grep -q '^#!/usr/bin/env node$'
-          test -f dist/index.js
-          test -f dist/ppsspp.js
-          test -f dist/tools.js
-          echo "build artifacts OK"
+          python -c "import mcp_ppsspp, mcp_ppsspp.server, mcp_ppsspp.tools, mcp_ppsspp.ppsspp"
+          set +e
+          out=$(PPSSPP_PORT= mcp-ppsspp 2>&1)
+          code=$?
+          set -e
+          test "$code" -eq 1 || { echo "expected exit 1, got $code"; exit 1; }
+          echo "$out" | grep -q "PPSSPP_PORT not set" || { echo "missing FATAL message"; exit 1; }
+          echo "console script OK"
 
   ci-ok:
     name: ci-ok

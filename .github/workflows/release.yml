@@ -1,4 +1,4 @@
-name: Publish to npm
+name: Publish to PyPI
 
 on:
   push:
@@ -14,10 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-python@v6
         with:
-          node-version: 22
-          registry-url: 'https://registry.npmjs.org'
-      - run: npm install -g npm@latest
-      - run: npm ci
-      - run: npm publish
+          python-version: '3.12'
+      - name: Install build backend
+        run: python -m pip install --upgrade build
+      - name: Build distributions
+        run: python -m build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

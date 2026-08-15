@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Rewritten in Python.** The Node.js/TypeScript implementation was
+  replaced by an async Python package (`src/mcp_ppsspp/`) built on the
+  official `mcp` Python SDK and `websockets`. The MCP tool surface is
+  unchanged (24 tools, same names/schemas/descriptions); the stdio
+  transport, `PpssppClient` WebSocket protocol handling, auto-reconnect,
+  and the three verification scripts were ported 1:1. Installation is now
+  `pip install mcp-ppsspp` (Python 3.10+), the console command is still
+  `mcp-ppsspp`, and the Dockerfile / CI / release workflows now target
+  Python and PyPI.
+
 ## [0.2.0] - 2026-07-19
 
 ### Added

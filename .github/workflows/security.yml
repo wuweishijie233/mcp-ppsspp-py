@@ -1,18 +1,13 @@
-name: Daily security & lockfile refresh
+name: Daily security scan
 
-# Two independent jobs:
-#   snyk      - report-only. Snyk's DB is consistently ahead of npm's, but its
-#               remediation advice has been wrong before (it reported "no
-#               remediation available" for GHSA-v2hh-gcrm-f6hx the day after
-#               fast-uri 3.1.4 shipped), so it never drives a fix here.
-#   lockfile  - the part that actually fixes things. `npm update` moves
-#               transitive deps to their newest release inside the ranges
-#               package.json already declares. That is what closes advisories
-#               like the fast-uri one, with no advisory database involved.
+# Report-only dependency audit (pip-audit) plus a dependency-freshness check
+# that opens an issue when newer versions of installed packages are
+# available. The audit never drives a fix automatically - findings are
+# uploaded to code scanning for review.
 
 on:
   schedule:
-    - cron: '17 6 * * *' # daily, 06:17 UTC — off the hour to dodge peak queueing
+    - cron: '17 6 * * *' # daily, 06:17 UTC - off the hour to dodge peak queueing
   workflow_dispatch:
 
 permissions:
@@ -23,145 +18,68 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  snyk:
-    name: snyk scan
+  audit:
+    name: pip-audit
     runs-on: ubuntu-latest
     permissions:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-python@v6
         with:
-          node-version: 22
+          python-version: '3.12'
 
-      - run: npm ci
+      - run: pip install -e .
+      - run: pip install pip-audit
 
-      - name: Snyk test
+      - name: pip-audit
         continue-on-error: true # findings must not fail the scheduled run
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: |
-          if [ -z "${SNYK_TOKEN}" ]; then
-            echo "::warning title=SNYK_TOKEN not set::Skipping Snyk scan. Add the SNYK_TOKEN repository secret to enable it."
-            exit 0
-          fi
-          npx --yes snyk@latest test --sarif-file-output=snyk.sarif
+        run: pip-audit --format sarif --output pip-audit.sarif
 
       - name: Upload SARIF to code scanning
-        if: hashFiles('snyk.sarif') != ''
+        if: hashFiles('pip-audit.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: snyk.sarif
-          category: snyk
+          sarif_file: pip-audit.sarif
+          category: pip-audit
 
-  lockfile:
-    name: lockfile freshness
+  refresh:
+    name: dependency freshness
     runs-on: ubuntu-latest
     permissions:
       contents: write
       issues: write
     steps:
-      # A PAT is required, for two separate reasons:
-      #   1. main requires the ci-ok check. enforce_admins is false, so a push
-      #      authenticated as the (admin) owner bypasses it; github-actions[bot]
-      #      is not an admin and would be rejected.
-      #   2. Commits pushed with GITHUB_TOKEN do not trigger workflows, so
-      #      ci.yml would never run on the resulting commit.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
         with:
-          token: ${{ secrets.AUTOMATION_TOKEN || github.token }}
+          python-version: '3.12'
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-
-      - name: Snapshot current lockfile
-        run: cp package-lock.json /tmp/lock.before.json
-
-      - name: Refresh within declared semver ranges
-        id: gate
+      - name: Collect outdated packages
+        id: outdated
         run: |
-          set -uo pipefail
+          pip install -e .
+          pip list --outdated --format=json > /tmp/outdated.json || true
+          count=$(python -c "import json; print(len(json.load(open('/tmp/outdated.json'))))")
+          echo "count=$count" >> "$GITHUB_OUTPUT"
 
-          npm update
-          node .github/scripts/lockfile-gate.mjs /tmp/lock.before.json package-lock.json > /tmp/gate.full.json
-
-          # A single minor bump must not block legitimate patch updates - those are
-          # usually the security-relevant ones. If the full refresh is not clean,
-          # roll back and retry restricted to just the packages that moved
-          # patch-level, then re-gate that subset.
-          if [ "$(node -p "require('/tmp/gate.full.json').clean")" = "true" ]; then
-            cp /tmp/gate.full.json /tmp/gate.json
-          else
-            SUBSET=$(node -p "require('/tmp/gate.full.json').patch.map(m=>m.name).join(' ')")
-            git checkout -- package-lock.json
-            if [ -n "$SUBSET" ]; then
-              echo "Deferring non-patch updates; retrying with: $SUBSET"
-              npm update $SUBSET
-              node .github/scripts/lockfile-gate.mjs /tmp/lock.before.json package-lock.json > /tmp/gate.json
-            else
-              echo '{"moves":[],"patch":[],"nonPatch":[],"added":[],"removed":[],"clean":true}' > /tmp/gate.json
-            fi
-          fi
-
-          cat /tmp/gate.json
-          {
-            echo "clean=$(node -p "require('/tmp/gate.json').clean")"
-            echo "moves=$(node -p "require('/tmp/gate.json').moves.length")"
-            echo "deferred=$(node -p "require('/tmp/gate.full.json').nonPatch.length")"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Guard — package.json must not have changed
-        run: |
-          if ! git diff --quiet -- package.json; then
-            echo "::error::npm update modified package.json; this job is lockfile-only. Aborting."
-            exit 1
-          fi
-
-      - name: Verify build against refreshed lockfile
-        if: steps.gate.outputs.moves != '0' && steps.gate.outputs.clean == 'true'
-        run: |
-          npm ci
-          npm run build
-
-      - name: Commit and push
-        if: steps.gate.outputs.moves != '0' && steps.gate.outputs.clean == 'true'
-        run: |
-          if [ -z "${{ secrets.AUTOMATION_TOKEN }}" ]; then
-            echo "::error title=AUTOMATION_TOKEN not set::A patch-level lockfile refresh is ready but cannot be pushed. main requires the ci-ok check and github-actions[bot] cannot bypass it. Add an AUTOMATION_TOKEN secret (fine-grained PAT, Contents: read/write)."
-            exit 1
-          fi
-          SUMMARY=$(node -p "require('/tmp/gate.json').patch.map(m=>m.name+' '+m.from+' -> '+m.to).join('\n')")
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "fix(deps): refresh lockfile to latest patch releases" \
-                     -m "${SUMMARY}" \
-                     -m "Automated patch-level refresh within the semver ranges package.json already declares. package.json is unchanged, so published consumers are unaffected."
-          git push origin HEAD:main
-
-      - name: Report deferred non-patch updates
-        if: steps.gate.outputs.deferred != '0'
+      - name: File / update refresh issue
+        if: steps.outdated.outputs.count != '0'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TITLE="Dependency refresh: non-patch updates awaiting review"
+          BODY=$(python - <<'EOF'
+          import json
+          data = json.load(open('/tmp/outdated.json'))
+          lines = [f"- `{p['name']}` {p['version']} -> {p['latest_version']}" for p in data]
+          print("The scheduled freshness check found newer versions of installed packages.\n\n" + "\n".join(lines))
+          EOF
+          )
+          TITLE="Dependency refresh: newer versions available"
           EXISTING=$(gh issue list --state open --search "$TITLE in:title" --json number --jq '.[0].number')
-          BODY=$(node -e "
-            const g = require('/tmp/gate.full.json');
-            const applied = require('/tmp/gate.json');
-            let s = 'The scheduled refresh found updates that are **not** patch-level. They were left unapplied; the patch-level subset was applied separately.\n\n';
-            s += '### Deferred — needs review\n';
-            s += g.nonPatch.map(x => '- \`' + x.name + '\` ' + x.from + ' → ' + x.to + ' (' + x.level + ')').join('\n') + '\n\n';
-            if (g.added.length)   s += '### Packages added\n' + g.added.map(x => '- \`' + x.name + '\` ' + x.version).join('\n') + '\n\n';
-            if (g.removed.length) s += '### Packages removed\n' + g.removed.map(x => '- \`' + x.name + '\` ' + x.version).join('\n') + '\n\n';
-            s += '### Applied automatically this run\n';
-            s += (applied.patch.length ? applied.patch.map(x => '- \`' + x.name + '\` ' + x.from + ' → ' + x.to).join('\n') : '_none_') + '\n\n';
-            s += 'To take the deferred ones: \`npm update\` locally, verify, and push.';
-            console.log(s);
-          ")
           if [ -n "$EXISTING" ]; then
             echo "Updating existing issue #$EXISTING instead of filing a duplicate."
             gh issue comment "$EXISTING" --body "$BODY"

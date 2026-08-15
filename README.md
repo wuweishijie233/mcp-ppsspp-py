@@ -1,51 +1,59 @@
 # mcp-ppsspp
 
-[![npm version](https://img.shields.io/npm/v/mcp-ppsspp.svg)](https://www.npmjs.com/package/mcp-ppsspp)
-[![npm downloads](https://img.shields.io/npm/dm/mcp-ppsspp.svg)](https://www.npmjs.com/package/mcp-ppsspp)
+**English** | [??](README.zh-CN.md)
+
+[![PyPI version](https://img.shields.io/pypi/v/mcp-ppsspp.svg)](https://pypi.org/project/mcp-ppsspp/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/mcp-ppsspp.svg)](https://pypi.org/project/mcp-ppsspp/)
 [![CI](https://github.com/dmang-dev/mcp-ppsspp/actions/workflows/ci.yml/badge.svg)](https://github.com/dmang-dev/mcp-ppsspp/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/npm/l/mcp-ppsspp.svg)](LICENSE)
-[![Snyk](https://snyk.io/test/npm/mcp-ppsspp/badge.svg)](https://snyk.io/test/npm/mcp-ppsspp)
-[![Socket](https://img.shields.io/badge/Socket-security-2F7BFF?logo=socket)](https://socket.dev/npm/package/mcp-ppsspp)
-[![Bundlephobia](https://img.shields.io/badge/bundlephobia-size-FF6B81)](https://bundlephobia.com/package/mcp-ppsspp)
-[![npmgraph](https://img.shields.io/badge/npmgraph-dependencies-2496ED)](https://npmgraph.js.org/?q=mcp-ppsspp)
+[![License: MIT](https://img.shields.io/pypi/l/mcp-ppsspp.svg)](LICENSE)
 
-An [MCP](https://modelcontextprotocol.io) server that exposes [PPSSPP](https://www.ppsspp.org) — the PlayStation Portable emulator — to any MCP-compatible client (Claude Desktop, Claude Code, etc.) via PPSSPP's built-in WebSocket debugger interface.
+An [MCP](https://modelcontextprotocol.io) server that exposes [PPSSPP](https://www.ppsspp.org) - the PlayStation Portable emulator - to any MCP-compatible client (Claude Desktop, Claude Code, etc.) via PPSSPP's built-in WebSocket debugger interface.
 
-Read and write PSP memory, drive games with button input, capture screenshots, set CPU breakpoints, inspect MIPS Allegrex registers — all through a clean tool interface. No bridge plugin needed; PPSSPP's debugger is built into the emulator.
+Read and write PSP memory, drive games with button input, capture screenshots, set CPU breakpoints, inspect MIPS Allegrex registers - all through a clean tool interface. No bridge plugin needed; PPSSPP's debugger is built into the emulator.
 
 ## How it works
 
 ```
 +------------------+    stdio     +------------------+   WebSocket    +------------------+
-|   MCP client     |   JSON-RPC   |    mcp-ppsspp    |   JSON-RPC     |     PPSSPP       |
-| (Claude / etc.)  | ===========> |     (Node.js)    | =============> |    (debugger)    |
+|   MCP client     |   JSON-RPC   |   mcp-ppsspp     |   JSON-RPC     |     PPSSPP       |
+| (Claude / etc.)  | ===========> |     (Python)     | =============> |    (debugger)    |
 +------------------+              +------------------+                +------------------+
 ```
 
-Unlike the [mcp-bizhawk](https://github.com/dmang-dev/mcp-bizhawk) / [mcp-mgba](https://github.com/dmang-dev/mcp-mgba) bridges (which need a Lua plugin loaded into the emulator), PPSSPP ships with its own debugger WebSocket interface — we just speak JSON to it. **No plugin to install.**
+Unlike the [mcp-bizhawk](https://github.com/dmang-dev/mcp-bizhawk) / [mcp-mgba](https://github.com/dmang-dev/mcp-mgba) bridges (which need a Lua plugin loaded into the emulator), PPSSPP ships with its own debugger WebSocket interface - we just speak JSON to it. **No plugin to install.**
 
 The connection uses subprotocol `debugger.ppsspp.org` on PPSSPP's debugger port.
 
 ## Requirements
 
-- [PPSSPP](https://www.ppsspp.org/download) (recent version with WebSocket debugger — 1.7+)
-- **Node.js 22+**
+- [PPSSPP](https://www.ppsspp.org/download) (recent version with WebSocket debugger - 1.7+)
+- **Python 3.10+**
 - "Allow remote debugger" enabled in PPSSPP
 
 ## Install
 
 ```bash
-npm install -g mcp-ppsspp
+pip install mcp-ppsspp
 ```
 
-Or `npx -y mcp-ppsspp`.
+Or from a source checkout:
+
+```bash
+pip install -e .
+```
+
+Or with [uv](https://docs.astral.sh/uv/):
+
+```bash
+uvx mcp-ppsspp
+```
 
 ## Set up PPSSPP's debugger
 
 1. Launch PPSSPP, load any PSP ISO/EBOOT
-2. **Settings → Tools → Developer Tools → Allow remote debugger** (check the box)
+2. **Settings -> Tools -> Developer Tools -> Allow remote debugger** (check the box)
 3. PPSSPP will show the active host:port (e.g. `ws://192.168.1.10:12345/debugger`)
-4. Note the port number — you'll set it as an environment variable for the MCP server
+4. Note the port number - you'll set it as an environment variable for the MCP server
 
 ## Register with your MCP client
 
@@ -59,7 +67,7 @@ Replace `12345` with your actual port. Verify:
 
 ```bash
 claude mcp list
-# ppsspp: mcp-ppsspp - ✓ Connected
+# ppsspp: mcp-ppsspp - Connected
 ```
 
 ### Claude Desktop
@@ -84,7 +92,7 @@ Restart Claude Desktop after editing.
 | Env var        | Default       | Purpose                                          |
 |----------------|---------------|--------------------------------------------------|
 | `PPSSPP_HOST`  | `127.0.0.1`   | WebSocket host to dial                           |
-| `PPSSPP_PORT`  | (required)    | WebSocket port — see PPSSPP's debugger settings  |
+| `PPSSPP_PORT`  | (required)    | WebSocket port - see PPSSPP's debugger settings  |
 
 ## Tools
 
@@ -105,6 +113,7 @@ Restart Claude Desktop after editing.
 | `ppsspp_reset` | Soft-reset the loaded game |
 | `ppsspp_screenshot` | Capture framebuffer as inline PNG |
 | `ppsspp_get_registers` | Read all MIPS Allegrex registers |
+| `ppsspp_set_register` | Write a single MIPS Allegrex register |
 | `ppsspp_breakpoint_add` / `_remove` / `_list` | CPU execution breakpoints |
 
 ### PSP memory map (cheat sheet)
@@ -131,20 +140,31 @@ PSP is **little-endian** (MIPS Allegrex). Kernel-mode mirrors at `0x88xxxxxx` ma
 | `WebSocket connection failed` | PPSSPP isn't running, "Allow remote debugger" isn't checked, or you have the wrong port |
 | Tool calls hang / time out | Check the PPSSPP UI is responding; the WebSocket request requires PPSSPP's main loop to dispatch |
 | `Invalid address` on memory ops | Address is outside the PSP's mapped regions (user RAM is `0x08800000+`, not `0x00000000+`) |
-| Screenshot returns no data | No game loaded — boot an ISO/EBOOT first |
+| Screenshot returns no data | No game loaded - boot an ISO/EBOOT first |
 | Buttons don't seem to do anything | PPSSPP's input has the buttons but they may not "feel" right via remote input if the game polls fast; try `ppsspp_press_button` with a longer `duration` |
 
 ## Limitations
 
-- **No savestate API** — PPSSPP's WebSocket debugger doesn't expose `savestate.save` / `load`. Use PPSSPP's keybinds (F1-F8 for slots) via the UI for now. Could be hacked by using `input.buttons.press` to trigger the keybind, but not native.
+- **No savestate API** - PPSSPP's WebSocket debugger doesn't expose `savestate.save` / `load`. Use PPSSPP's keybinds (F1-F8 for slots) via the UI for now. Could be hacked by using `input.buttons.press` to trigger the keybind, but not native.
 - **Frame-advance is instruction-level only** (`cpu.stepInto`). To advance a whole frame, set a breakpoint at the vblank handler and `resume`.
-- **Analog stick is shared state** — `ppsspp_send_analog` updates the persistent stick position; not auto-released.
+- **Analog stick is shared state** - `ppsspp_send_analog` updates the persistent stick position; not auto-released.
 
 ## Development
 
 ```bash
-npm install
-npm run dev      # tsc --watch — autobuilds on src/ changes
+python -m venv .venv
+.venv/Scripts/activate        # Windows
+# source .venv/bin/activate   # macOS / Linux
+pip install -e ".[dev]"
+pytest                        # runs the unit + stdio end-to-end tests
+```
+
+The test suite uses an in-process fake PPSSPP WebSocket server, so it runs without PPSSPP installed. `scripts/` contains live verification scripts that need a real PPSSPP instance:
+
+```bash
+PPSSPP_PORT=12345 python scripts/smoke.py
+PPSSPP_PORT=12345 python scripts/verify_reconnect.py
+PPSSPP_PORT=12345 python scripts/verify_screenshot.py
 ```
 
 ## Debugging with the MCP Inspector
@@ -152,10 +172,10 @@ npm run dev      # tsc --watch — autobuilds on src/ changes
 Browse and call this server's tools interactively with the [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
 
 ```bash
-PPSSPP_PORT=<port> npm run inspector
+PPSSPP_PORT=<port> npx @modelcontextprotocol/inspector mcp-ppsspp
 ```
 
-Build first if you've edited `src/` since your last `npm install` (`npm run build`, or keep `npm run dev` running). `mcp-ppsspp` has no default port — read the active one off PPSSPP's **Developer Tools → Allow remote debugger** dialog and pass it as `PPSSPP_PORT`. `tools/list` works even without PPSSPP connected; *calling* a tool needs PPSSPP running with the remote debugger enabled.
+`mcp-ppsspp` has no default port - read the active one off PPSSPP's **Developer Tools -> Allow remote debugger** dialog and pass it as `PPSSPP_PORT`. `tools/list` works even without PPSSPP connected; *calling* a tool needs PPSSPP running with the remote debugger enabled.
 
 ## License
 

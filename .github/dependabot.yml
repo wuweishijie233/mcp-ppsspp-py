@@ -1,6 +1,6 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
+  - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -9,7 +9,7 @@ updates:
       prefix: "build"
       include: "scope"
     groups:
-      npm-minor-patch:
+      pip-minor-patch:
         update-types:
           - "minor"
           - "patch"
@@ -22,7 +22,7 @@ updates:
       prefix: "build"
       include: "scope"
     ignore:
-      - dependency-name: "node"
+      - dependency-name: "python"
         update-types:
           - "version-update:semver-major"
 

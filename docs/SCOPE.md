@@ -16,7 +16,7 @@ Critically: **PPSSPP ships its own debugger WebSocket interface**. Unlike mGBA /
 ## Architecture
 
 ```
-Claude / MCP client                mcp-ppsspp (Node.js)             PPSSPP
+Claude / MCP client                mcp-ppsspp (Python)             PPSSPP
 ─────────────────                  ────────────────────              ──────
    MCP stdio   ─────JSON-RPC───>   Adapter / dispatcher  ──WS───>   Debugger
                                                           (JSON)     subscribers
@@ -61,7 +61,7 @@ Mapping from PPSSPP WebSocket events → MCP tools:
 
 ### What we don't (yet) expose
 
-PPSSPP has events for these, but they're not in v0.1.0:
+PPSSPP has events for these, but they're not exposed yet:
 
 - **GPU**: `gpu.buffer.renderColor` / `renderDepth` / `renderStencil` / `texture` / `clut` — useful for graphics debugging
 - **GPU recording**: `gpu.record.dump` — captures a frame's GPU command stream
@@ -87,25 +87,28 @@ PPSSPP's debugger is genuinely richer than what BizHawk / mGBA / RetroArch expos
 
 If we wanted to do real reverse-engineering work on PSP games via Claude, this is a unique-among-the-family surface. The mcp-mgba/mcp-bizhawk Lua bridges don't have native breakpoints; the mcp-pine/mcp-retroarch wrappers can't really debug.
 
-## Reusable from mcp-bizhawk (~80%)
+## Project structure (Python port)
 
-Direct copy with name swaps:
-- `package.json` skeleton
-- `tsconfig.json`
-- `.gitignore`
-- `LICENSE`
-- `Dockerfile`
-- `glama.json`
-- `.github/workflows/ci.yml`
-- README structure
-- CHANGELOG skeleton
+The server is written in Python (async) using the official
+[`mcp`](https://github.com/modelcontextprotocol/python-sdk) SDK plus
+[`websockets`](https://websockets.readthedocs.io/) for the debugger
+connection. Layout:
 
-Adapt:
-- `src/index.ts` — different env vars (`PPSSPP_HOST`, `PPSSPP_PORT`), different "FATAL on missing config" message
-- `src/tools.ts` — TDQS-templated descriptions specific to PSP (memory map, MIPS, PSP buttons)
-
-Rewrite:
-- **`src/ppsspp.ts`** — WebSocket client (vs `mcp-bizhawk/src/bizhawk.ts`'s TCP server). Different concurrency model (request/response with ticket correlation, not frame-poll), no Lua bridge needed.
+- **`src/mcp_ppsspp/server.py`** - stdio MCP entrypoint. Reads
+  `PPSSPP_HOST` / `PPSSPP_PORT` (port required, no default), prints a clear
+  "FATAL on missing config" message, kicks off a best-effort early connect,
+  registers every tool, and serves MCP requests over stdio.
+- **`src/mcp_ppsspp/ppsspp.py`** - async WebSocket client speaking PPSSPP's
+  `debugger.ppsspp.org` subprotocol. Ticket-correlated request/response (not
+  frame-poll), fire-and-forget for `cpu.stepping` / `cpu.resume`,
+  `wait_for_state()` polling on `cpu.status`, and auto-reconnect when PPSSPP
+  restarts.
+- **`src/mcp_ppsspp/tools.py`** - registers every MCP tool against the
+  FastMCP server. TDQS-templated descriptions specific to PSP (memory map,
+  MIPS, PSP buttons).
+- **`tests/`** - unit + end-to-end tests that run against an in-process fake
+  PPSSPP WebSocket server, so `pytest` passes without PPSSPP installed.
+- **`scripts/`** - live verification scripts that need a real PPSSPP.
 
 ## Estimated effort vs actual
 
