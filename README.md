@@ -1,6 +1,6 @@
 # mcp-ppsspp
 
-**English** | [??](README.zh-CN.md)
+**English** | [中文](README.zh-CN.md)
 
 [![PyPI version](https://img.shields.io/pypi/v/mcp-ppsspp.svg)](https://pypi.org/project/mcp-ppsspp/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/mcp-ppsspp.svg)](https://pypi.org/project/mcp-ppsspp/)
