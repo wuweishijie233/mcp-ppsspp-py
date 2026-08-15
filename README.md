@@ -177,6 +177,13 @@ PPSSPP_PORT=<port> npx @modelcontextprotocol/inspector mcp-ppsspp
 
 `mcp-ppsspp` has no default port - read the active one off PPSSPP's **Developer Tools -> Allow remote debugger** dialog and pass it as `PPSSPP_PORT`. `tools/list` works even without PPSSPP connected; *calling* a tool needs PPSSPP running with the remote debugger enabled.
 
+## Contributors
+
+- [wuweishijie233](https://github.com/wuweishijie233) - Python port (this repository)
+- [dmang-dev](https://github.com/dmang-dev) - original TypeScript implementation
+
+Contributions welcome! Open an issue or pull request.
+
 ## License
 
 [MIT](LICENSE)

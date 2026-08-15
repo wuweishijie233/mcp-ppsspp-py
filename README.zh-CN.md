@@ -177,6 +177,13 @@ PPSSPP_PORT=<端口> npx @modelcontextprotocol/inspector mcp-ppsspp
 
 `mcp-ppsspp` 没有默认端口——请从 PPSSPP 的**开发者工具 -> 允许远程调试**对话框读取当前端口，并作为 `PPSSPP_PORT` 传入。即使没连 PPSSPP，`tools/list` 也能用；但*调用*工具需要 PPSSPP 正在运行且开启了远程调试。
 
+## 贡献者
+
+- [wuweishijie233](https://github.com/wuweishijie233) - Python 移植（本仓库）
+- [dmang-dev](https://github.com/dmang-dev) - 原 TypeScript 实现
+
+欢迎贡献！可以提交 Issue 或 PR。
+
 ## 许可证
 
 [MIT](LICENSE)
